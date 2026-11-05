@@ -19,7 +19,6 @@ hands/
     netns.py               create/destroy namespaces, bridge, veth (idempotent)
     netem.py               apply/clear profiles, read `tc -s`
     chrome-ns.sh           2-line wrapper: start Chrome inside a namespace
-    setup_vm.sh            installs all dependencies on a fresh Debian (reproducibility)
   configs/experiment.yaml  variants, profiles, sweep, repetitions, durations, seed
   analysis/analyze.py      logs → metric tables (pandas)
   analysis/plots.py        matplotlib figures for the report
@@ -187,7 +186,7 @@ We considered running one Docker container per browser. A container *is* a netwo
 - With two networks, Chrome can pick the unimpaired one for WebRTC, which silently invalidates the measurements.
 - Headed demos need X11 forwarding or VNC.
 
-Reproducibility comes from `setup_vm.sh` instead. This paragraph is worth keeping in the report as a justification of the design.
+Reproducibility comes from the step-by-step VM guide in `docs/vm-setup.md` instead. This paragraph is worth keeping in the report as a justification of the design.
 
 ### 3.3 VM, Chrome, Debian
 
@@ -203,7 +202,7 @@ Reproducibility comes from `setup_vm.sh` instead. This paragraph is worth keepin
   | Stability over the semester | 6.12 LTS kernel, fixed versions | Frequent kernel/package updates |
   | Friction | – | SELinux can interfere with netns/Chrome |
 
-- **Pin Chrome:** run `apt-mark hold google-chrome-stable` in `setup_vm.sh`, so Chrome doesn't auto-update mid-campaign. Record the Chrome, kernel and iproute2 versions in `meta.json`.
+- **Pin Chrome:** run `apt-mark hold google-chrome-stable` (see `docs/vm-setup.md`), so Chrome doesn't auto-update mid-campaign. Record the Chrome, kernel and iproute2 versions in `meta.json`.
 - Use a light desktop (XFCE, or KDE) for headed demos. Measurement campaigns run headless.
 
 ## 4. Network emulation (tc/netem)

@@ -2,8 +2,6 @@
 
 This guide takes a freshly installed Debian 13 (trixie) arm64 VM in UTM from the text console to a complete working environment. After it, nothing else should need installing: project dependencies (Python packages, npm packages) are installed per project by `uv` and `npm`.
 
-Later these commands go into `harness/setup_vm.sh` (milestone step 0.2).
-
 ---
 
 ## 1. sudo for your user

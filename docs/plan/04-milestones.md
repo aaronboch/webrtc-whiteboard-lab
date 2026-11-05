@@ -11,7 +11,7 @@ Rule of thumb: **commit after every step**, and add a line to `docs/llm-usage.md
 | Step | Task | Done when |
 |---|---|---|
 | 0.1 | Create a Debian 13 arm64 VM in UTM (≥ 4 vCPUs) with XFCE (or KDE) and a sudo user. Take a VM snapshot "clean". | VM boots; snapshot exists |
-| 0.2 | Install Google Chrome arm64, Node LTS, `uv`, Python 3, `iproute2`. Pin Chrome with `apt-mark hold google-chrome-stable`. Write every command into `harness/setup_vm.sh` while doing it. | Restoring the snapshot and running `setup_vm.sh` reproduces the setup |
+| 0.2 | Install Google Chrome arm64, Node LTS, `uv`, Python 3, `iproute2`. Pin Chrome with `apt-mark hold google-chrome-stable`. Document every command in `docs/vm-setup.md` while doing it. | Following `docs/vm-setup.md` on a fresh install reproduces the setup |
 | 0.3 | Repo skeleton: `web/` (Vite vanilla-ts template), `server/`, `harness/`, `analysis/`, `configs/`, `pyproject.toml`. `.gitignore`: `runs/`, `node_modules/`, `dist/`. | `npm run dev` and `uv run python -c "import playwright"` both work |
 | 0.4 | `harness/netns.py up / down / status`: creates `br0`, `ns_a`, `ns_b` and the veth pairs; idempotent. | `sudo ip netns exec ns_a ping 10.10.0.3` works; running `up` twice causes no error |
 | 0.5 | `harness/netem.py apply <ns> "<args>" / clear / stats` | `ping` shows +delay; `ping -c 500` with 10% loss shows about 10% loss; `stats` shows drops |
