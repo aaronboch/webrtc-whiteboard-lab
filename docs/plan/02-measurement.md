@@ -18,7 +18,7 @@ An in-page, seeded, deterministic stroke generator lives in `workload.ts`:
 
 Playwright only calls `page.evaluate("app.startWorkload(seed, durationS)")`.
 
-**Repetitions** use the **same workload seed**, so every variant and every repetition sends an identical op stream. The only thing that varies between repetitions is netem's randomness.
+**Repetitions** use the **same workload seed**, so every variant and every repetition sends an identical op stream. The only thing that varies between repetitions is netem's randomness, which is fixed per repetition by a netem seed (`01` §4), so every run can be reproduced.
 
 **Peers and direction:** the app supports N peers (`01` §2), but measurements use 2 peers and one direction (A draws, B receives), which keeps the metrics clean. Multi-peer and bidirectional drawing are for the demo only.
 
@@ -41,7 +41,7 @@ Logs are kept in memory in the page, per link (remote `peerId`), and dumped once
 
 - variant name and full option set
 - profile and the exact netem command
-- workload seed, netem seed (if supported), repetition index
+- workload seed, netem seed, repetition index
 - Chrome, kernel and iproute2 versions
 - git commit
 - timestamps (start, netem applied, workload start/end, drain end)

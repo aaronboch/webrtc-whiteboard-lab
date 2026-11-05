@@ -46,7 +46,7 @@ Rule of thumb: **commit after every step**, and add a line to `docs/llm-usage.md
 |---|---|---|
 | 3.1 | `configs/experiment.yaml` + loader: expands variants × profiles × repetitions into a list of runs. | `--dry-run` prints the list of runs |
 | 3.2 | Start the signaling server once per session. `run_once()`: launch both browsers in their namespaces, open the page, wait for the channel to open, apply netem, warm up 3 s, run the workload, drain, `dumpMetrics()`, clear netem, close the browsers. | A single `v1/ideal` run writes `events_a.json` + `events_b.json` |
-| 3.3 | Add `meta.json` (variant, profile, netem args, seed, Chrome/kernel/iproute2 versions, git commit, timestamps), `tc.txt` and screenshots. | Run folder complete |
+| 3.3 | Add `meta.json` (variant, profile, netem args, workload and netem seed, Chrome/kernel/iproute2 versions, git commit, timestamps), `tc.txt` and screenshots. | Run folder complete |
 | 3.4 | Matrix loop with `try/finally` cleanup (netem always cleared, browsers closed); skip already finished runs (resume). | Killing it halfway and restarting continues the campaign |
 | 3.5 | `--manual [--peers N] [--profile P] [--variant V]`: set up the environment and open N headed browsers (peer 1 in `ns_a`, the others in `ns_b`), no workload; clear netem on Ctrl+C. | You can draw by hand in all windows with the chosen profile active |
 | 3.6 | Control bar, part 2: live profile switching. The dropdown sends `set_profile` over the signaling WebSocket; the server (manual mode) runs `tc qdisc replace` in both namespaces and broadcasts `profile_changed`; the HUD shows the current profile. | Switching `ideal` → `loss10` → `ideal` while drawing changes the behavior visibly, with no reconnect |

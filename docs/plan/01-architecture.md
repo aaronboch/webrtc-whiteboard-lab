@@ -123,7 +123,7 @@ A small control bar, shown only when `auto=1` is not set:
 
 | Control | What it does | How |
 |---|---|---|
-| **Network profile dropdown** | Switches the netem profile **without restarting** browsers or connections. The current profile is shown in every peer's HUD. | The page sends `{type:'set_profile', name}` over the signaling WebSocket. In `--manual` mode, the server runs `tc qdisc replace dev eth0 root netem <args>` in both namespaces (`ideal` deletes the qdisc), then broadcasts `profile_changed` to the room. `replace` changes the parameters in place, and the WebRTC connections stay up. |
+| **Network profile dropdown** | Switches the netem profile **without restarting** browsers or connections. The current profile is shown in every peer's HUD. | The page sends `{type:'set_profile', name}` over the signaling WebSocket. In `--manual` mode, the server runs `tc qdisc replace dev eth0 root netem <args>` in both namespaces (`ideal` applies netem with no arguments: no impairment, but the `tc -s` byte counters keep running, which the default veth qdisc does not), then broadcasts `profile_changed` to the room. `replace` changes the parameters in place, and the WebRTC connections stay up. |
 | **Clear (local)** | Clears only my own canvas and resets my HUD counters. | Purely local. |
 | **Clear all** | Clears every peer's canvas and resets their counters. | Sent as `{type:'clear'}` over the **signaling WebSocket**, not the DataChannel. If it went over the DataChannel, V1 could lose it and leave some peers uncleared. |
 | **View mode** | Toggles true color / latency heatmap (also on a key, e.g. `H`). | Local. |
@@ -239,12 +239,14 @@ Notes:
 - netem `reorder` requires `delay`, and large jitter alone already reorders packets.
 - **Expected result:** reordering barely affects V1 and V3, because ops are order-independent. Only V2 (ordered delivery) suffers. That is a finding to explain in the report, not a bug.
 - Optionally add `rate 1mbit` to make overhead costs visible.
-- Check whether the installed kernel and iproute2 support netem's `seed` option. If they do, use one netem seed per repetition, so the loss patterns are reproducible.
+- **netem `seed` is supported** (verified 2026-11-05 on the VM's Debian 13 kernel and iproute2: `tc qdisc show` lists a `seed`, which netem picks at random when none is given). Each repetition gets a fixed netem seed (`netem_seed + repetition index`), appended to the profile's args as `seed <n>`. Repetition k then uses the same random sequence in every variant, so the runs are reproducible.
+  - A shared seed does not mean identical drops across variants: the random sequence is consumed per packet, and the variants send different packet streams (e.g. V3 adds ACKs and retransmissions).
 
 ### Config sketch
 
 ```yaml
 seed: 42                # workload seed, the same for every repetition
+netem_seed: 1000        # netem seed of repetition k = netem_seed + k
 duration_s: 30
 warmup_s: 3
 drain_s: 10
