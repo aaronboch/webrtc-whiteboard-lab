@@ -1,1 +1,12 @@
 .DS_STORE
+
+# Measurement results
+runs/
+
+# Node / Vite
+node_modules/
+dist/
+
+# Python / uv
+.venv/
+__pycache__/
