@@ -14,7 +14,7 @@ Changes relative to the original notes. All of them are reviewed and incorporate
 10. **Use Debian 13 instead of Fedora.** It has official Playwright support, netem in the default kernel, and a stable kernel for the whole semester (`01-architecture.md` §3.5). Record the Chrome, kernel and iproute2 versions in `meta.json`.
 11. **Keep `docs/llm-usage.md` from day one.** The professor requires documentation of how the AI was used. Log it as you go instead of reconstructing it at the end.
 12. **One YAML config with the matrix,** as in the notes, plus metadata per run. No separate profile system.
-13. **N peers in the app, 2 peers in measurements.** The whiteboard is a full mesh for any number of peers, as in the notes. The V1–V3 tests use one sender and one receiver, which keeps the metrics clean (`01` §2).
+13. **Exactly 2 peers.** Clarified with the professor (the N-peer mesh from the notes was a misunderstanding). One connection, both peers can draw and both visualize what they receive; the V1–V3 tests use one direction, which keeps the metrics clean (`01` §2).
 14. **Run as root with `--no-sandbox` in the VM.** A 2-line wrapper puts Chrome into its namespace (`01` §3.1).
 15. **Warm-up after netem, excess-latency deadlines, censored mean latency.** These keep the metrics fair across profiles (`02` §4–5).
 16. **Skip:**
@@ -23,5 +23,5 @@ Changes relative to the original notes. All of them are reviewed and incorporate
     - a binary wire format
     - tcpdump/pcaps
     - XOR-parity FEC (piggyback redundancy covers the idea)
-    - more than 2 peers *in the measurements* (the app supports N)
+    - more than 2 peers (mesh, rooms, peer lists)
     - Jupyter as a dependency (`analyze.py`/`plots.py` are enough; a notebook is optional for exploration only)

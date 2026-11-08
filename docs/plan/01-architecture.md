@@ -6,14 +6,14 @@
 hands/
   web/                   TS + Vite + Canvas2D (static build)
     src/main.ts            UI wiring, URL params (?variant=v1&role=sender&auto=1)
-    src/signaling.ts       WebSocket client: join room, peer list, addressed offer/answer/ICE
-    src/mesh.ts            one RTCPeerConnection + Transport per remote peer; broadcast ops
+    src/signaling.ts       WebSocket client: pairing, offer/answer/ICE relay, control messages
+    src/peer.ts            the single RTCPeerConnection + Transport to the other peer
     src/transport.ts       Transport interface + V1/V2 (plain DataChannel)
     src/reliable.ts        V3 reliability layer (wraps an unreliable DataChannel)
     src/whiteboard.ts      canvas rendering: true color + latency heatmap
     src/workload.ts        seeded deterministic stroke generator
     src/metrics.ts         in-memory event log, getStats sampling, dump()
-  server/signaling.py    aiohttp: WS signaling rooms + serves web/dist (~60 lines)
+  server/signaling.py    aiohttp: pairs the 2 peers, relays signaling, serves web/dist (~50 lines)
   harness/
     orchestrator.py        runs the experiment matrix (as root)
     netns.py               create/destroy namespaces, bridge, veth (idempotent)
@@ -33,28 +33,19 @@ hands/
 
 ## 2. Application components
 
-### Peers: N-peer mesh in the app, 2 peers in measurements
+### Peers: exactly 2
 
-**The app supports any number of peers** in a room, connected as a **full mesh**:
+The app connects **exactly two peers**, A and B (confirmed with the professor on 2026-11-06), over **one `RTCPeerConnection` with one DataChannel**. No mesh, no rooms, no media server.
 
-- Every pair of peers has its own `RTCPeerConnection` with one DataChannel.
-- Every peer can draw. Each op is sent to all connected peers.
-- Each peer gets a random `peerId` when it joins.
-- **Who offers:** a peer that joins sends offers to all peers already in the room, and the existing peers answer. Only one side of each pair ever offers, so the two sides never send offers to each other at the same time (glare).
-- A full mesh is fine for a whiteboard with a handful of peers. No media server (SFU) is needed.
+- **Who offers:** the peer that connects to the signaling server second creates the DataChannel and sends the offer; the first one answers. Only one side ever offers, so glare cannot happen.
+- **Both peers can draw**, in the live demo at the same time. Measurements are one-way: A draws (`?role=sender`, the automated workload runs here), B only receives (`?role=receiver`).
 
-**Measurements use exactly 2 peers.** Peer A draws (`?role=sender`, the automated workload runs here), and peer B only receives and measures (`?role=receiver`). Two peers are enough to compare V1–V3, and they keep the metrics clean.
+**Symmetric peers:** both peers run the same code with both halves always active. There is no sender-only or receiver-only code path.
 
-- `role` only tells the automation which peer runs the workload.
-- In manual mode, `role` is omitted and everyone draws.
-
-**Per-link design:** everything in this plan is per *link*:
-
-- Transport variant
-- V3 state
-- Metrics
-
-A peer with 3 remotes simply has 3 links. Nothing in V1–V3 depends on the number of peers.
+- **Sending half:** assigns its own `seq`, stamps `tSend`, logs sends; for V3 also the history buffer, retransmissions and redundancy.
+- **Receiving half:** drops duplicates by `seq`, logs receives with their latency, and feeds the heatmap and HUD; for V3 also the received-set and ACK/NACK feedback.
+- So whichever peer draws, the *other* peer visualizes the metrics for those ops (A draws → B shows them, B draws → A shows them, both draw → both show them).
+- `role` only tells the automation which peer runs the workload. It never switches code off. In manual mode it is omitted.
 
 ### Transport abstraction
 
@@ -71,22 +62,22 @@ The whiteboard only calls `transport.send(op)` and `transport.onOp(cb)`. The var
 One op is one line segment:
 
 ```ts
-{ peerId, seq, strokeId, x0, y0, x1, y1, color, width, tSend }
+{ seq, strokeId, x0, y0, x1, y1, color, width, tSend }
 ```
 
-- **`seq`** is assigned by the drawing peer, once per op, counting up per peer. **`(peerId, seq)`** is the unique op id. It is the **only** sequence number in the system.
+- **`seq`** is assigned by the drawing peer, once per op, counting up. It is the op id and the **only** sequence number in the system. Each peer only ever receives the other peer's ops, so `seq` is unique per direction and no peer id is needed.
   - Metrics join sends and receives by it.
-  - V3 acknowledges ops by `seq` per link.
+  - V3 acknowledges ops by `seq`.
   - V3 packets have no packet-level sequence number of their own (see `03`).
-- `strokeId` is also unique per peer.
+- `strokeId` is also counted per drawing peer.
 - Segments are **idempotent and order-independent**: the final picture is correct no matter in which order, or how late, they arrive.
 - Messages are encoded as JSON. Every variant uses the same encoding, so overhead comparisons stay relative and fair.
 
 ### Signaling server
 
-- A minimal aiohttp app with WebSocket rooms. It also serves `web/dist`.
-- On join, the server assigns or accepts a `peerId`, sends the joining peer the list of peers already in the room, and notifies the others.
-- Offer, answer and ICE messages carry `{from, to}`, and the server forwards each one to its addressee.
+- A minimal aiohttp app with one WebSocket endpoint. It also serves `web/dist`.
+- It holds at most 2 clients. When the second connects, the server tells it to offer and tells the first to answer. A third client is rejected. When one disconnects, the other gets `peer_left` and waits for a new partner (e.g. after a page reload).
+- Offer, answer and ICE messages are simply forwarded to the other client. No addressing is needed.
 - It is started **once per session** (not per run), in the root namespace on `10.10.0.1`.
 - It is used in both automated and manual mode.
 - No STUN or TURN is needed, because the peers reach each other directly on the emulated network.
@@ -105,17 +96,16 @@ The same web app serves both. URL parameters and the orchestrator flags decide w
 
 | Where | How | Netem |
 |---|---|---|
-| Mac, during development | `npm run dev`, then open 2+ tabs on `localhost` | none |
-| VM, with network emulation | `sudo uv run harness/orchestrator.py --manual [--peers N] [--profile loss10] [--variant v3-hybrid]` | yes, switchable live |
+| Dev server, during development | `npm run dev`, then open 2 tabs on `localhost` | none |
+| VM, with network emulation | `sudo uv run harness/orchestrator.py --manual [--profile loss10] [--variant v3-hybrid]` | yes, switchable live |
 
 In the VM, `--manual`:
 
 1. Sets up the namespaces and starts the signaling server.
-2. Opens **N headed Chrome windows** (default 2) with no workload. Peer 1 runs in `ns_a`, and every other peer runs in `ns_b`.
-   - All peers in `ns_b` share that namespace's netem settings, so every link from A experiences the same network conditions.
+2. Opens **2 headed Chrome windows** with no workload: A in `ns_a`, B in `ns_b`.
 3. Applies the starting profile, then waits until you press Ctrl+C, and clears netem on exit.
 
-Everyone draws with the mouse. More tabs can also join the same room by hand.
+Both peers draw with the mouse, and each one shows the metrics for the strokes it receives.
 
 ### Live controls (control bar in the page)
 
@@ -123,9 +113,9 @@ A small control bar, shown only when `auto=1` is not set:
 
 | Control | What it does | How |
 |---|---|---|
-| **Network profile dropdown** | Switches the netem profile **without restarting** browsers or connections. The current profile is shown in every peer's HUD. | The page sends `{type:'set_profile', name}` over the signaling WebSocket. In `--manual` mode, the server runs `tc qdisc replace dev eth0 root netem <args>` in both namespaces (`ideal` applies netem with no arguments: no impairment, but the `tc -s` byte counters keep running, which the default veth qdisc does not), then broadcasts `profile_changed` to the room. `replace` changes the parameters in place, and the WebRTC connections stay up. |
+| **Network profile dropdown** | Switches the netem profile **without restarting** browsers or connections. The current profile is shown in both peers' HUDs. | The page sends `{type:'set_profile', name}` over the signaling WebSocket. In `--manual` mode, the server runs `tc qdisc replace dev eth0 root netem <args>` in both namespaces (`ideal` applies netem with no arguments: no impairment, but the `tc -s` byte counters keep running, which the default veth qdisc does not), then sends `profile_changed` to both peers. `replace` changes the parameters in place, and the WebRTC connections stay up. |
 | **Clear (local)** | Clears only my own canvas and resets my HUD counters. | Purely local. |
-| **Clear all** | Clears every peer's canvas and resets their counters. | Sent as `{type:'clear'}` over the **signaling WebSocket**, not the DataChannel. If it went over the DataChannel, V1 could lose it and leave some peers uncleared. |
+| **Clear all** | Clears both peers' canvases and resets their counters. | Sent as `{type:'clear'}` over the **signaling WebSocket**, not the DataChannel. If it went over the DataChannel, V1 could lose it and leave the other peer uncleared. |
 | **View mode** | Toggles true color / latency heatmap (also on a key, e.g. `H`). | Local. |
 
 Notes:

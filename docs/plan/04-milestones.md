@@ -21,12 +21,12 @@ Rule of thumb: **commit after every step**, and add a line to `docs/llm-usage.md
 
 | Step | Task | Done when |
 |---|---|---|
-| 1.1 | `server/signaling.py`: aiohttp, `/ws?room=x`; on join, sends the peer list and notifies the others; forwards messages addressed `{from, to}`; serves `web/dist` statically. | Three browser tabs in one room see the join events and addressed messages (log) |
-| 1.2 | `web/src/signaling.ts` + `web/src/mesh.ts`: a joining peer offers to every existing peer (and creates the DataChannel); existing peers answer. One `RTCPeerConnection` per remote. | Two tabs on the Mac show "channel open"; a third tab joining opens channels to both |
+| 1.1 | `server/signaling.py`: aiohttp, `/ws`; pairs at most 2 clients (the second gets "offer", the first "answer"), forwards messages to the other client, sends `peer_left` on disconnect, rejects a third client; serves `web/dist` statically. | Two tabs are told to offer / answer and see each other's forwarded messages (log); a third tab is rejected |
+| 1.2 | `web/src/signaling.ts` + `web/src/peer.ts`: the offering peer creates the DataChannel and the offer, the other answers. One `RTCPeerConnection`. | Two tabs show "channel open"; reloading one tab reconnects |
 | 1.3 | `web/src/transport.ts`: `Transport` interface (`send(op)`, `onOp(cb)`), factory for V1 and V2 from the `?variant=` URL param. | A test message goes A→B in each variant |
-| 1.4 | Op model (`peerId`, per-peer `seq`) + `web/src/whiteboard.ts`: draw locally with the mouse, turn moves into segments, send them to all peers, render remote segments. | Manual drawing works between 3 tabs, everyone drawing, for all variants |
-| 1.5 | Minimal HUD: variant, connected peers, ops sent/received. | Visible in all tabs |
-| 1.6 | Control bar, part 1: clear local, and clear all (`{type:'clear'}` via the signaling WebSocket); view-mode toggle placeholder. | "Clear all" in one tab clears all 3 tabs, also with V1 |
+| 1.4 | Op model (`seq` per drawing peer) + `web/src/whiteboard.ts`: draw locally with the mouse, turn moves into segments, send them to the other peer, render received segments. | Manual drawing works between 2 tabs, both drawing at once, for all variants |
+| 1.5 | Minimal HUD: variant, connection state, ops sent/received. | Visible in both tabs |
+| 1.6 | Control bar, part 1: clear local, and clear all (`{type:'clear'}` via the signaling WebSocket); view-mode toggle placeholder. | "Clear all" in one tab clears both tabs, also with V1 |
 | 1.7 | First real test: two headed Chromes in `ns_a`/`ns_b` via `chrome-ns.sh`, draw by hand, apply `loss10` with `netem.py`. | Visibly: V1 has gaps, V2 has stalls and catch-up bursts |
 
 
@@ -37,7 +37,7 @@ Rule of thumb: **commit after every step**, and add a line to `docs/llm-usage.md
 | 2.1 | `web/src/metrics.ts`: `now()` = `performance.timeOrigin + performance.now()`; in-memory send/recv event arrays; `dumpMetrics()` returns JSON. | After drawing, `dumpMetrics()` in DevTools shows events with plausible latencies |
 | 2.2 | `web/src/workload.ts`: seeded PRNG (e.g. mulberry32), Bézier strokes, 60 Hz point timer, `startWorkload(seed, durationS)`. | The same seed twice gives the same op list (compare hashes) |
 | 2.3 | getStats snapshots (start/end) + `bufferedAmount` sampler every 50 ms, included in `dumpMetrics()`. | Values present in the dump |
-| 2.4 | Heatmap mode on the receiver (color by `now() − op.tSend`), legend, toggle key. | Under netem, delayed parts appear red in V2 |
+| 2.4 | Heatmap mode for received ops (on both peers) (color by `now() − op.tSend`), legend, toggle key. | Under netem, delayed parts appear red in V2 |
 | 2.5 | Automation API: `window.app = { waitOpen(), startWorkload(), isDone(), dumpMetrics() }`; `?auto=1` disables mouse input. | Every function works from the DevTools console |
 
 ## Phase 3: Orchestrator (weeks 5–7)
@@ -48,7 +48,7 @@ Rule of thumb: **commit after every step**, and add a line to `docs/llm-usage.md
 | 3.2 | Start the signaling server once per session. `run_once()`: launch both browsers in their namespaces, open the page, wait for the channel to open, apply netem, warm up 3 s, run the workload, drain, `dumpMetrics()`, clear netem, close the browsers. | A single `v1/ideal` run writes `events_a.json` + `events_b.json` |
 | 3.3 | Add `meta.json` (variant, profile, netem args, workload and netem seed, Chrome/kernel/iproute2 versions, git commit, timestamps), `tc.txt` and screenshots. | Run folder complete |
 | 3.4 | Matrix loop with `try/finally` cleanup (netem always cleared, browsers closed); skip already finished runs (resume). | Killing it halfway and restarting continues the campaign |
-| 3.5 | `--manual [--peers N] [--profile P] [--variant V]`: set up the environment and open N headed browsers (peer 1 in `ns_a`, the others in `ns_b`), no workload; clear netem on Ctrl+C. | You can draw by hand in all windows with the chosen profile active |
+| 3.5 | `--manual [--profile P] [--variant V]`: set up the environment and open 2 headed browsers (A in `ns_a`, B in `ns_b`), no workload; clear netem on Ctrl+C. | You can draw by hand in both windows with the chosen profile active, and each window shows the metrics for what it receives |
 | 3.6 | Control bar, part 2: live profile switching. The dropdown sends `set_profile` over the signaling WebSocket; the server (manual mode) runs `tc qdisc replace` in both namespaces and broadcasts `profile_changed`; the HUD shows the current profile. | Switching `ideal` → `loss10` → `ideal` while drawing changes the behavior visibly, with no reconnect |
 
 **Optional, any time after Phase 3:** the nice-to-have live visualizations N1–N10 from `02-measurement.md` §8. Pick them individually; none of them blocks anything else.
@@ -72,8 +72,8 @@ Options as described in `03-v3-reliability-options.md`. The order below reuses c
 
 | Step | Task | Done when |
 |---|---|---|
-| 5.1 | `reliable.ts` framework (one instance per link): packet encode/decode, receiver dedup + received-set, sender history buffer with per-remote acks, tick timer, config flags. | With all mechanisms off it produces the same results as V1 |
-| 5.2 | **Unit-test harness:** an in-memory fake channel with seeded loss, delay and reordering (vitest). All V3 logic gets tested here without browsers. | Tests run in < 1 s with `npm test` |
+| 5.1 | `reliable.ts` framework (one instance per peer, sending and receiving half): packet encode/decode, receiver dedup + received-set, sender history buffer with acks, tick timer, config flags. | With all mechanisms off it produces the same results as V1 |
+| 5.2 | **Unit-test harness:** an in-memory fake channel with seeded loss, delay and reordering (vitest). All V3 logic gets tested here without browsers, including both peers sending at once. | Tests run in < 1 s with `npm test` |
 | 5.3 | Feedback message + RTT estimator (echoed timestamps, srtt/rttvar). | Unit test: estimated RTT ≈ fake channel delay × 2 |
 | 5.4 | **Option A:** SACK feedback, fast retransmit, RTO with backoff. | Unit test: 20% loss leads to 100% delivery. Browser run: `C_final` = 1 under `loss10`. |
 | 5.5 | End-of-run: sender logs "all acked" time; retransmits are logged with `kind`. | Time-to-complete visible in metrics |

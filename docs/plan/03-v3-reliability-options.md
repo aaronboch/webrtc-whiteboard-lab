@@ -7,10 +7,10 @@ All options **A–E stay candidates**. Implementing one is required; implementin
 ## Common framework
 
 - **Sequence numbers:** the op's `seq` (assigned per drawing peer, see `01` §2) is the only sequence number. Acknowledgements, NACKs and repair requests all refer to op `seq`s.
-- **Per link:** V3 runs independently on every link (pair of peers), and "sender" and "receiver" below refer to the two ends of one link.
-  - In a mesh, a drawing peer keeps one history buffer of its own ops but tracks acknowledgements separately per remote peer.
-  - An op leaves the buffer only once every remote has acked it.
-  - Measurements use one link (A→B).
+- **Both directions:** V3 runs in both directions on the one connection. Each peer is the "sender" for its own ops and the "receiver" for the other peer's ops, as below.
+  - Feedback for one direction (ACK, NACK, …) travels alongside data of the other direction; the packet `type` keeps them apart. The two directions share only the DataChannel and the RTT estimator.
+  - An op leaves the sender's history buffer once the other peer has acked it.
+  - Measurements use one direction (A→B).
 - **Packet format** (JSON). A packet has no sequence number of its own:
 
   ```ts

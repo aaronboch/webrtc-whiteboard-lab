@@ -32,7 +32,7 @@ Other conditions:
 
 ## Constraints (confirmed with the professor)
 
-- **The whiteboard supports N peers** (full mesh, everyone can draw), as in the notes. **Measurements use 2 peers**: A draws (sender), B receives. Two peers are enough to compare V1–V3, and they keep the metrics clean.
+- **Exactly 2 peers** (clarified with the professor on 2026-11-06; an earlier N-peer mesh was a misunderstanding). Both peers can draw, and each one visualizes the metrics for what it receives. **Measurements are one-way**: A draws (sender), B receives, which keeps the metrics clean.
 - **V3 must not use a reliable DataChannel**, not even as a side channel for repair. All reliability in V3 is our own code on top of `{ordered:false, maxRetransmits:0}`.
 - **Several V3 options** (see `03-…`) are optional but welcome as a comparison.
 - **The report and talk are in German.** The plan docs are in English.
