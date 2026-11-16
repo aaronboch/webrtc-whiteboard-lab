@@ -36,6 +36,8 @@ export interface MetricsDump {
     requestedVariant: string
     timeOrigin: number
     userAgent: string
+    /** True when the page is cross-origin isolated: timer resolution 5 µs, else 100 µs. */
+    crossOriginIsolated: boolean
   }
   sends: SendEvent[]
   recvs: RecvEvent[]
@@ -101,6 +103,7 @@ export class Metrics {
         requestedVariant: this.requestedVariant,
         timeOrigin: performance.timeOrigin,
         userAgent: navigator.userAgent,
+        crossOriginIsolated: window.crossOriginIsolated,
       },
       sends: this.sends,
       recvs: this.recvs,

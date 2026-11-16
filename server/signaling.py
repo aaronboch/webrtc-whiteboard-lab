@@ -143,6 +143,20 @@ async def close_sockets(app: web.Application) -> None:
         await ws.close(code=WSCloseCode.GOING_AWAY, message=b"server shutdown")
 
 
+# Cross-origin isolation: only isolated pages get the fine timer
+# (performance.now() at 5 µs instead of 100 µs). The page loads nothing from
+# other origins, so these headers restrict nothing we use.
+ISOLATION_HEADERS = {
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp",
+}
+
+
+async def add_isolation_headers(request: web.Request, response: web.StreamResponse) -> None:
+    """Runs for every response (pages, static files, WebSocket upgrade)."""
+    response.headers.update(ISOLATION_HEADERS)
+
+
 async def index(request: web.Request) -> web.FileResponse:
     return web.FileResponse(WEB_DIST / "index.html")
 
@@ -152,6 +166,7 @@ def make_app() -> web.Application:
     app[PEERS] = []
     app[SOCKETS] = set()
     app.on_shutdown.append(close_sockets)
+    app.on_response_prepare.append(add_isolation_headers)
     app.router.add_get("/ws", ws_handler)
     # The built app; missing until `npm run build` has run in web/.
     if WEB_DIST.is_dir():
