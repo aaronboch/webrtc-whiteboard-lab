@@ -29,6 +29,29 @@ export interface RecvEvent {
   duplicate: boolean
 }
 
+/** dc.bufferedAmount over time: bytes queued in SCTP, not yet sent. */
+export interface BufferedSample {
+  t: number
+  bufferedAmount: number
+}
+
+/** A filtered pc.getStats() report, taken at a named point of the run. */
+export interface StatsSnapshot {
+  label: string
+  t: number
+  stats: Record<string, unknown>[]
+}
+
+/** bufferedAmount sampling interval (docs/plan/02-measurement.md §3). */
+const SAMPLE_MS = 50
+
+/**
+ * getStats entries worth keeping: message/byte counters of the channel, the
+ * transport and the peer connection, plus the candidate pair in use (RTT).
+ * Certificates, codecs, candidates etc. would only bloat the dump.
+ */
+const KEPT_STATS = new Set(['peer-connection', 'data-channel', 'transport', 'candidate-pair'])
+
 /** The automated workload of this run, if one ran on this peer. */
 export interface WorkloadInfo {
   seed: number
@@ -50,7 +73,8 @@ export interface MetricsDump {
   }
   sends: SendEvent[]
   recvs: RecvEvent[]
-  // Step 2.3 adds: bufferedAmount samples, getStats snapshots.
+  samples: BufferedSample[]
+  stats: StatsSnapshot[]
 }
 
 export class Metrics {
@@ -62,6 +86,9 @@ export class Metrics {
   private readonly seen = new Set<number>()
   private sent = 0
   private workload: WorkloadInfo | null = null
+  private samples: BufferedSample[] = []
+  private snapshots: StatsSnapshot[] = []
+  private sampler: ReturnType<typeof setInterval> | null = null
 
   constructor(requestedVariant: string) {
     this.requestedVariant = requestedVariant
@@ -71,6 +98,30 @@ export class Metrics {
   /** The variant actually running (from the DataChannel label). */
   setVariant(variant: string): void {
     this.variant = variant
+  }
+
+  /** Sample dc.bufferedAmount every SAMPLE_MS while the channel is open. */
+  startSampling(dc: RTCDataChannel): void {
+    this.stopSampling()
+    this.sampler = setInterval(
+      () => this.samples.push({ t: now(), bufferedAmount: dc.bufferedAmount }),
+      SAMPLE_MS,
+    )
+  }
+
+  stopSampling(): void {
+    if (this.sampler !== null) clearInterval(this.sampler)
+    this.sampler = null
+  }
+
+  addSnapshot(label: string, t: number, report: RTCStatsReport): void {
+    const stats: Record<string, unknown>[] = []
+    report.forEach((entry) => {
+      if (!KEPT_STATS.has(entry.type)) return
+      if (entry.type === 'candidate-pair' && !entry.nominated) return
+      stats.push({ ...entry })
+    })
+    this.snapshots.push({ label, t, stats })
   }
 
   setWorkload(info: WorkloadInfo): void {
@@ -109,6 +160,8 @@ export class Metrics {
     this.seen.clear()
     this.sent = 0
     this.workload = null
+    this.samples = []
+    this.snapshots = []
   }
 
   dump(): MetricsDump {
@@ -123,6 +176,8 @@ export class Metrics {
       },
       sends: this.sends,
       recvs: this.recvs,
+      samples: this.samples,
+      stats: this.snapshots,
     }
   }
 }

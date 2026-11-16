@@ -87,6 +87,11 @@ export class Peer {
     })
   }
 
+  /** getStats() of the current connection, or null if there is none. */
+  getStats(): Promise<RTCStatsReport> | null {
+    return this.pc ? this.pc.getStats() : null
+  }
+
   /**
    * Tear down the connection (partner left, channel closed, ICE failed).
    * Safe to call repeatedly; onClose fires once per connection. A new

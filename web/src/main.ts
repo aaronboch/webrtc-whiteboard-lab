@@ -21,6 +21,7 @@ declare global {
     app: {
       dumpMetrics(): MetricsDump
       startWorkload(seed: number, durationS: number): Promise<WorkloadTiming>
+      snapshotStats(label: string): Promise<void>
     }
   }
 }
@@ -32,6 +33,13 @@ window.app = {
     const timing = await runWorkload(generateScript(seed, durationS), (s) => board.draw(s))
     metrics.setWorkload({ seed, durationS, ...timing })
     return timing
+  },
+  /** Store a filtered getStats() report under `label` (e.g. 'start', 'end'). */
+  async snapshotStats(label) {
+    const t = now()
+    const report = await peer.getStats()
+    if (!report) throw new Error('snapshotStats: no connection')
+    metrics.addSnapshot(label, t, await report)
   },
 }
 
@@ -75,6 +83,7 @@ const peer = new Peer(variant, (data) => signaling.sendSignal(data), {
     // The offerer named the channel after its variant; that one is running.
     hud.setVariant(dc.label)
     metrics.setVariant(dc.label)
+    metrics.startSampling(dc)
     transport = createTransport(dc, metrics)
     transport.onOp((op) => {
       board.addRemote(op)
@@ -84,6 +93,7 @@ const peer = new Peer(variant, (data) => signaling.sendSignal(data), {
   },
   onClose() {
     transport = null
+    metrics.stopSampling()
     hud.setVariant(null)
     setStatus('connection closed')
   },
