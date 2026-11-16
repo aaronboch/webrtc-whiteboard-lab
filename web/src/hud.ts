@@ -19,8 +19,6 @@ export class Hud {
   private readonly mismatchEl: HTMLElement
   private readonly stateEl: HTMLElement
   private readonly countsEl: HTMLElement
-  private sent = 0
-  private received = 0
 
   constructor(container: HTMLElement, options: HudOptions) {
     container.innerHTML = `
@@ -49,7 +47,7 @@ export class Hud {
       .addEventListener('click', () => options.onClearAll())
 
     this.setVariant(null)
-    this.renderCounts()
+    this.setCounts(0, 0)
   }
 
   /**
@@ -76,23 +74,8 @@ export class Hud {
     this.stateEl.textContent = text
   }
 
-  countSent(): void {
-    this.sent++
-    this.renderCounts()
-  }
-
-  countReceived(): void {
-    this.received++
-    this.renderCounts()
-  }
-
-  resetCounts(): void {
-    this.sent = 0
-    this.received = 0
-    this.renderCounts()
-  }
-
-  private renderCounts(): void {
-    this.countsEl.textContent = `sent ${this.sent} · received ${this.received}`
+  /** Ops sent and distinct ops received (from the metrics). */
+  setCounts(sent: number, received: number): void {
+    this.countsEl.textContent = `sent ${sent} · received ${received}`
   }
 }

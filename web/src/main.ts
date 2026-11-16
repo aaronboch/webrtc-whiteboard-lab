@@ -2,16 +2,25 @@
 
 import './style.css'
 import { Hud } from './hud'
+import { Metrics, now, type MetricsDump } from './metrics'
 import { Peer } from './peer'
 import { Signaling, signalingUrl } from './signaling'
 import { createTransport, parseVariant, type Transport } from './transport'
 import { Whiteboard } from './whiteboard'
 
-const now = () => performance.timeOrigin + performance.now()
-
 const params = new URLSearchParams(location.search)
 const variant = parseVariant(params.get('variant'))
 const auto = params.get('auto') === '1'
+
+const metrics = new Metrics(variant)
+
+// Automation API (extended in step 2.5); also handy from the DevTools console.
+declare global {
+  interface Window {
+    app: { dumpMetrics(): MetricsDump }
+  }
+}
+window.app = { dumpMetrics: () => metrics.dump() }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = '<header id="bar"></header><div id="board"></div>'
@@ -25,9 +34,12 @@ const hud = new Hud(app.querySelector<HTMLElement>('#bar')!, {
 })
 const setStatus = (text: string) => hud.setState(text)
 
+const updateCounts = () => hud.setCounts(metrics.sentCount, metrics.receivedCount)
+
 function clearBoard(): void {
   board.clear()
-  hud.resetCounts()
+  metrics.reset()
+  updateCounts()
 }
 
 let transport: Transport | null = null
@@ -41,7 +53,7 @@ const board = new Whiteboard(app.querySelector<HTMLDivElement>('#board')!, {
   onDraw(segment) {
     if (!transport) return // not connected: drawn locally only
     transport.send({ ...segment, seq: seq++, tSend: now() })
-    hud.countSent()
+    updateCounts()
   },
 })
 
@@ -49,10 +61,11 @@ const peer = new Peer(variant, (data) => signaling.sendSignal(data), {
   onOpen(dc) {
     // The offerer named the channel after its variant; that one is running.
     hud.setVariant(dc.label)
-    transport = createTransport(dc)
+    metrics.setVariant(dc.label)
+    transport = createTransport(dc, metrics)
     transport.onOp((op) => {
       board.addRemote(op)
-      hud.countReceived()
+      updateCounts()
     })
     setStatus('channel open')
   },

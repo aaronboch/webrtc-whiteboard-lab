@@ -2,6 +2,8 @@
 // calls send(op) and onOp(cb). The variants differ only in their DataChannel
 // options; V3 (reliable.ts) will wrap the channel later.
 
+import { now, type Metrics } from './metrics'
+
 /** One line segment. `seq` (per drawing peer) is the op id. */
 export interface Op {
   seq: number
@@ -46,15 +48,24 @@ export function parseVariant(param: string | null): Variant {
 
 /**
  * Transport over an open DataChannel. JSON encoding for every variant.
- * Ops sent while the channel is not open are dropped (they then count as
- * lost, which is what they are).
+ * Records every message in `metrics`. An op sent while the channel is not
+ * open is recorded but dropped, so it counts as lost, which is what it is.
+ * Message sizes are string lengths: the JSON is pure ASCII, so they equal
+ * the UTF-8 byte counts.
  */
-export function createTransport(dc: RTCDataChannel): Transport {
+export function createTransport(dc: RTCDataChannel, metrics: Metrics): Transport {
   let handler: ((op: Op) => void) | null = null
-  dc.onmessage = (event) => handler?.(JSON.parse(event.data) as Op)
+  dc.onmessage = (event) => {
+    const t = now() // first, before parsing
+    const op = JSON.parse(event.data) as Op
+    metrics.recordRecv(op.seq, op.tSend, t, event.data.length)
+    handler?.(op)
+  }
   return {
     send(op) {
-      if (dc.readyState === 'open') dc.send(JSON.stringify(op))
+      const message = JSON.stringify(op)
+      metrics.recordSend(op.seq, op.tSend, message.length)
+      if (dc.readyState === 'open') dc.send(message)
     },
     onOp(cb) {
       handler = cb
