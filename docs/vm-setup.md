@@ -130,6 +130,14 @@ If all of these succeed, the VM is complete. The rest happens inside the project
   ```sh
   sudo "$(which uv)" run harness/orchestrator.py configs/experiment.yaml
   ```
-- **Displaying root-launched Chrome:** once per desktop login, run `xhost +SI:localuser:root` in a normal (non-root) terminal before `--manual` mode.
+- **Displaying root-launched Chrome (Plasma 6 = Wayland):** run Chrome natively on Wayland. Through XWayland its windows stay empty/transparent. Start it from a terminal on the VM desktop (not SSH) and pass the session's Wayland address through sudo:
+  ```sh
+  sudo -v    # ask for the password in the foreground; background sudo jobs can't
+  sudo WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR NETNS=ns_a harness/chrome-ns.sh \
+    --ozone-platform=wayland --disable-gpu --no-first-run --no-default-browser-check \
+    --disable-features=WebRtcHideLocalIpsWithMdns --user-data-dir=/tmp/chrome-a \
+    "http://10.10.0.1:8000/?variant=v1" > /tmp/chrome-a.log 2>&1 &
+  ```
+  Use a separate `--user-data-dir` per window, or the second Chrome joins the first one's process (and namespace). `--disable-gpu` avoids GPU-process errors inside the namespace. In an X11 session, `DISPLAY=$DISPLAY` plus `xhost +SI:localuser:root` (once per login) works instead.
 - **VM resources:** give the VM ≥ 4 vCPUs and ≥ 8 GB RAM in UTM, so two or more Chromes plus the analysis don't distort timing.
 - **Snapshot:** after section 6 passes, take a UTM snapshot named "clean". It's milestone step 0.1's rollback point.

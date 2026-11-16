@@ -3,8 +3,8 @@
 Topology (see docs/plan/01-architecture.md §3.1):
 
     root ns: br0 10.10.0.1
-      ├── veth-a  <->  ns_a: eth0 10.10.0.2
-      └── veth-b  <->  ns_b: eth0 10.10.0.3
+      ├── veth-a  <->  ns_a: eth0 10.10.0.2   (default route via 10.10.0.1)
+      └── veth-b  <->  ns_b: eth0 10.10.0.3   (default route via 10.10.0.1)
 
 Usage (as root):
     sudo "$(which uv)" run harness/netns.py up|down|status
@@ -21,6 +21,7 @@ import sys
 
 BRIDGE = "br0"
 BRIDGE_ADDR = "10.10.0.1/24"
+GATEWAY = BRIDGE_ADDR.split("/")[0]
 
 # namespace -> (host-side veth name, address of eth0 inside the namespace)
 PEERS = {
@@ -69,6 +70,10 @@ def up() -> None:
         ip("-n", ns, "addr", "replace", addr, "dev", "eth0")
         ip("-n", ns, "link", "set", "eth0", "up")
         ip("-n", ns, "link", "set", "lo", "up")
+        # Chrome gathers no ICE candidates without a default route (it then
+        # treats the host as offline), so the DataChannel would never open.
+        # A↔B traffic still goes directly over the bridge and through netem.
+        ip("-n", ns, "route", "replace", "default", "via", GATEWAY)
 
 
 def down() -> None:
@@ -140,6 +145,15 @@ def qdisc_desc(ns: str) -> str:
     return "none"
 
 
+def has_default_route(ns: str) -> bool:
+    result = subprocess.run(
+        ["ip", "-j", "-n", ns, "route", "show", "default"],
+        capture_output=True, text=True,
+    )
+    routes = json.loads(result.stdout or "[]")
+    return any(r.get("gateway") == GATEWAY for r in routes)
+
+
 def status() -> bool:
     """Print the state of bridge and namespaces; True if everything is ok."""
     rows = []
@@ -156,10 +170,12 @@ def status() -> bool:
             continue
         eth0, eth0_ok = describe_dev("eth0", dev_info("eth0", ns), addr=addr)
         host, host_ok = describe_dev(veth, dev_info(veth), master=BRIDGE)
-        ok = eth0_ok and host_ok
+        route_ok = has_default_route(ns)
+        route = "route ok" if route_ok else "no default route"
+        ok = eth0_ok and host_ok and route_ok
         all_ok = all_ok and ok
         rows.append((ns, "ok" if ok else "partial",
-                     f"{eth0:<22} {host:<20} qdisc: {qdisc_desc(ns)}"))
+                     f"{eth0:<22} {host:<20} {route:<16} qdisc: {qdisc_desc(ns)}"))
 
     for name, state, details in rows:
         print(f"{name:<7} {state:<8} {details}".rstrip())

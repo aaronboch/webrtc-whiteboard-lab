@@ -28,10 +28,15 @@ export interface SignalingHandlers {
   onPaired(offer: boolean): void
   onSignal(data: SignalData): void
   onPeerLeft(): void
-  /** Server already has 2 peers; the connection is closed. */
+  /** Server already has 2 peers; the connection is closed, a retry follows. */
   onFull(): void
+  /** Connection to the server lost (not after `full`); a retry follows. */
+  onDisconnected(): void
   onClear(): void
 }
+
+/** Delay before reconnecting after `full` or a lost connection. */
+const RETRY_MS = 1000
 
 /** ws://<host the page came from>/ws (Vite proxies it during development). */
 export function signalingUrl(): string {
@@ -40,13 +45,35 @@ export function signalingUrl(): string {
 }
 
 export class Signaling {
-  private readonly ws: WebSocket
+  private readonly url: string
   private readonly handlers: SignalingHandlers
+  private ws!: WebSocket
 
   constructor(url: string, handlers: SignalingHandlers) {
+    this.url = url
     this.handlers = handlers
-    this.ws = new WebSocket(url)
-    this.ws.onmessage = (event) => this.dispatch(JSON.parse(event.data) as ServerMessage)
+    this.connect()
+  }
+
+  /**
+   * Open the WebSocket and reconnect whenever it closes. This covers the
+   * reload race: the new page can connect before the server has seen the
+   * old page's close (slow under netem loss) and gets `full`; the retry a
+   * second later succeeds. It also survives a server restart.
+   */
+  private connect(): void {
+    const ws = new WebSocket(this.url)
+    this.ws = ws
+    let full = false
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data) as ServerMessage
+      if (msg.type === 'full') full = true
+      this.dispatch(msg)
+    }
+    ws.onclose = () => {
+      if (!full) this.handlers.onDisconnected()
+      setTimeout(() => this.connect(), RETRY_MS)
+    }
   }
 
   /** Send an offer/answer/ICE candidate to the partner. */

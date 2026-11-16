@@ -74,6 +74,7 @@ const signaling = new Signaling(signalingUrl(), {
     peer.close()
     setStatus('partner left, waiting')
   },
-  onFull: () => setStatus('server full (2 peers already connected)'),
+  onFull: () => setStatus('server full (2 peers already connected), retrying'),
+  onDisconnected: () => setStatus('signaling server unreachable, retrying'),
   onClear: clearBoard,
 })

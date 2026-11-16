@@ -144,6 +144,7 @@ root ns: br0 10.10.0.1  (signaling server + orchestrator run here)
 
 - `netns.py` creates the topology with about 10 `ip` commands.
 - Each namespace has only `lo` + `eth0`, so ICE can only choose the emulated path.
+- Each namespace needs a **default route** (via `10.10.0.1`). Without one, Chrome treats the host as offline and gathers no ICE candidates, so the DataChannel never opens (found in step 1.7). A↔B traffic still goes directly over the bridge.
 - netem goes on each namespace's `eth0` egress, which allows the two directions to be set independently.
 
 **Why a wrapper script is needed.** A process starts in the network namespace of the program that launched it. The orchestrator, and with it Playwright, runs in the root namespace, because it has to control both browsers and run `tc`. If Playwright started Chrome directly, Chrome's traffic would bypass netem. Playwright has no "launch in namespace X" option, so we hand it a wrapper as the Chrome executable (`executable_path=harness/chrome-ns.sh`). The wrapper enters the namespace and then becomes Chrome:
