@@ -27,13 +27,15 @@ Usage:
 import argparse
 from pathlib import Path
 
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 MAX_PEERS = 2
 
 # Connected peers in join order (at most MAX_PEERS).
 PEERS = web.AppKey("peers", list[web.WebSocketResponse])
+# Every open WebSocket, registered or not, so shutdown can close them all.
+SOCKETS = web.AppKey("sockets", set[web.WebSocketResponse])
 
 
 async def send(ws: web.WebSocketResponse, msg: dict) -> None:
@@ -109,22 +111,36 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     app = request.app
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-
-    if not await join(app, ws):
-        print(f"{request.remote} rejected (full)", flush=True)
-        await ws.close()
-        return ws
-    print(f"{request.remote} joined ({len(app[PEERS])}/{MAX_PEERS})", flush=True)
-
+    app[SOCKETS].add(ws)
     try:
-        async for msg in ws:
-            if msg.type == WSMsgType.TEXT:
-                await handle_message(app, ws, msg.json())
+        if not await join(app, ws):
+            print(f"{request.remote} rejected (full)", flush=True)
+            await ws.close()
+            return ws
+        print(f"{request.remote} joined ({len(app[PEERS])}/{MAX_PEERS})", flush=True)
+
+        try:
+            async for msg in ws:
+                if msg.type == WSMsgType.TEXT:
+                    await handle_message(app, ws, msg.json())
+        finally:
+            # Runs on a normal close and on errors, so a peer never stays registered.
+            await leave(app, ws)
+            print(f"{request.remote} left ({len(app[PEERS])}/{MAX_PEERS})", flush=True)
+        return ws
     finally:
-        # Runs on a normal close and on errors, so a peer never stays registered.
-        await leave(app, ws)
-        print(f"{request.remote} left ({len(app[PEERS])}/{MAX_PEERS})", flush=True)
-    return ws
+        app[SOCKETS].discard(ws)
+
+
+async def close_sockets(app: web.Application) -> None:
+    """On shutdown (Ctrl+C, SIGTERM): close every WebSocket first.
+
+    Otherwise aiohttp cancels handlers that are still waiting for messages,
+    which ends in an "Unhandled exception" traceback. Closed sockets let
+    each handler finish normally (leave() runs, the pages start retrying).
+    """
+    for ws in list(app[SOCKETS]):
+        await ws.close(code=WSCloseCode.GOING_AWAY, message=b"server shutdown")
 
 
 async def index(request: web.Request) -> web.FileResponse:
@@ -134,6 +150,8 @@ async def index(request: web.Request) -> web.FileResponse:
 def make_app() -> web.Application:
     app = web.Application()
     app[PEERS] = []
+    app[SOCKETS] = set()
+    app.on_shutdown.append(close_sockets)
     app.router.add_get("/ws", ws_handler)
     # The built app; missing until `npm run build` has run in web/.
     if WEB_DIST.is_dir():
