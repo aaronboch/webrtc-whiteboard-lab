@@ -18,7 +18,11 @@ export interface Op {
 
 export type Variant = 'v1' | 'v2'
 
-/** DataChannel options per variant. Only the offerer's options take effect. */
+/**
+ * DataChannel options per variant. Only the offerer's options take effect;
+ * it also names the channel after its variant, so the answerer can read
+ * the variant actually in use from `dc.label`.
+ */
 export const CHANNEL_OPTIONS: Record<Variant, RTCDataChannelInit> = {
   v1: { ordered: false, maxRetransmits: 0 },
   v2: { ordered: true },
@@ -56,21 +60,4 @@ export function createTransport(dc: RTCDataChannel): Transport {
       handler = cb
     },
   }
-}
-
-/**
- * The answerer gets the channel the offerer created. Returns a warning if its
- * options don't match this page's variant (e.g. tabs with different
- * `?variant=`), otherwise null.
- */
-export function checkChannel(dc: RTCDataChannel, variant: Variant): string | null {
-  const want = CHANNEL_OPTIONS[variant]
-  // Unset options mean the defaults: ordered, unlimited retransmits (null).
-  const wantOrdered = want.ordered ?? true
-  const wantRetransmits = want.maxRetransmits ?? null
-  if (dc.ordered === wantOrdered && dc.maxRetransmits === wantRetransmits) return null
-  return (
-    `channel is ordered=${dc.ordered}, maxRetransmits=${dc.maxRetransmits}, ` +
-    `but this page's variant is ${variant}; the offerer's variant wins`
-  )
 }

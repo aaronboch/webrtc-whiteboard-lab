@@ -54,7 +54,7 @@ export class Peer {
     }
 
     if (offer) {
-      this.setupChannel(pc.createDataChannel('whiteboard', CHANNEL_OPTIONS[this.variant]))
+      this.setupChannel(pc.createDataChannel(this.variant, CHANNEL_OPTIONS[this.variant]))
       this.enqueue(async () => {
         await pc.setLocalDescription() // creates the offer
         this.sendSignal({ sdp: pc.localDescription!.toJSON() })
