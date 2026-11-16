@@ -68,6 +68,7 @@ body {
 
 /* Takes the remaining space; the canvas is centered and scaled inside. */
 #board {
+  position: relative; /* anchor for the legend */
   flex: 1;
   min-height: 0;
   display: flex;
@@ -80,4 +81,32 @@ body {
   background: #fff;
   /* box-shadow instead of border: a border would shift pointer coordinates */
   box-shadow: 0 0 0 1px #aaa;
+}
+
+.controls button.active {
+  background: #333;
+  color: #fff;
+}
+
+/* Heatmap legend in the board's lower left corner */
+.legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px #aaa;
+}
+.legend[hidden] {
+  display: none;
+}
+.legend-bar {
+  width: 180px;
+  height: 10px;
+  margin: 4px 0 2px;
+}
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
 }

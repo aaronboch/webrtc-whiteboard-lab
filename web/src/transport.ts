@@ -32,7 +32,8 @@ export const CHANNEL_OPTIONS: Record<Variant, RTCDataChannelInit> = {
 
 export interface Transport {
   send(op: Op): void
-  onOp(cb: (op: Op) => void): void
+  /** `tRecv`: arrival time, taken first thing in onmessage (same as the metrics). */
+  onOp(cb: (op: Op, tRecv: number) => void): void
 }
 
 /**
@@ -54,12 +55,12 @@ export function parseVariant(param: string | null): Variant {
  * the UTF-8 byte counts.
  */
 export function createTransport(dc: RTCDataChannel, metrics: Metrics): Transport {
-  let handler: ((op: Op) => void) | null = null
+  let handler: ((op: Op, tRecv: number) => void) | null = null
   dc.onmessage = (event) => {
     const t = now() // first, before parsing
     const op = JSON.parse(event.data) as Op
     metrics.recordRecv(op.seq, op.tSend, t, event.data.length)
-    handler?.(op)
+    handler?.(op, t)
   }
   return {
     send(op) {

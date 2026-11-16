@@ -52,6 +52,16 @@ const hud = new Hud(app.querySelector<HTMLElement>('#bar')!, {
   onClearLocal: clearBoard,
   // The server echoes `clear` to both peers, this one included.
   onClearAll: () => signaling.sendClear(),
+  onToggleView: toggleView,
+})
+
+function toggleView(): void {
+  board.setView(board.view === 'color' ? 'heatmap' : 'color')
+  hud.setHeatmap(board.view === 'heatmap')
+}
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'h' || event.key === 'H') toggleView()
 })
 const setStatus = (text: string) => hud.setState(text)
 
@@ -85,8 +95,8 @@ const peer = new Peer(variant, (data) => signaling.sendSignal(data), {
     metrics.setVariant(dc.label)
     metrics.startSampling(dc)
     transport = createTransport(dc, metrics)
-    transport.onOp((op) => {
-      board.addRemote(op)
+    transport.onOp((op, tRecv) => {
+      board.addRemote(op, tRecv - op.tSend)
       updateCounts()
     })
     setStatus('channel open')

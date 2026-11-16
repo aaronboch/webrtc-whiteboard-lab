@@ -11,6 +11,8 @@ export interface HudOptions {
   onClearLocal(): void
   /** Clear both peers (sent via the signaling server, not the DataChannel). */
   onClearAll(): void
+  /** Toggle true color / latency heatmap (also on the H key). */
+  onToggleView(): void
 }
 
 export class Hud {
@@ -19,6 +21,7 @@ export class Hud {
   private readonly mismatchEl: HTMLElement
   private readonly stateEl: HTMLElement
   private readonly countsEl: HTMLElement
+  private readonly viewButton: HTMLButtonElement
 
   constructor(container: HTMLElement, options: HudOptions) {
     container.innerHTML = `
@@ -31,7 +34,7 @@ export class Hud {
       <div class="controls">
         <button data-action="clear-local">Clear local</button>
         <button data-action="clear-all">Clear all</button>
-        <button disabled title="Latency heatmap: step 2.4">Heatmap (H)</button>
+        <button data-action="view" title="Toggle the latency heatmap (key H)">Heatmap (H)</button>
       </div>`
     this.requested = options.variant
     this.variantEl = container.querySelector('.variant')!
@@ -45,6 +48,8 @@ export class Hud {
       .addEventListener('click', () => options.onClearLocal())
     controls.querySelector('[data-action="clear-all"]')!
       .addEventListener('click', () => options.onClearAll())
+    this.viewButton = controls.querySelector<HTMLButtonElement>('[data-action="view"]')!
+    this.viewButton.addEventListener('click', () => options.onToggleView())
 
     this.setVariant(null)
     this.setCounts(0, 0)
@@ -67,6 +72,11 @@ export class Hud {
     const mismatch = active !== null && active !== this.requested
     this.mismatchEl.textContent = mismatch ? `page asked for ${this.requested}` : ''
     this.mismatchEl.hidden = !mismatch
+  }
+
+  /** Show which view is active (pressed look on the heatmap button). */
+  setHeatmap(on: boolean): void {
+    this.viewButton.classList.toggle('active', on)
   }
 
   /** Connection state, e.g. "waiting for partner" or "channel open". */
