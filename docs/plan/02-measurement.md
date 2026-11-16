@@ -142,6 +142,7 @@ Effort: **S** ≈ a few hours, **M** ≈ 1–2 days, **L** ≈ several days.
 | N8 | **Live variant switch** | A dropdown that changes the variant without reloading: the DataChannel is closed and recreated with the new options. | More convenient than reloading the page with a different `?variant=`, and the way to compare variants live during the demo. | M |
 | N9 | **Replay mode** | Load a recorded run (`events_*.json`) into the page and replay it in real time, showing how the receiver experienced it. Includes the heatmap and the packet strip. | Presentations can show real measurement runs without the VM or live network risk. | M–L |
 | N10 | **Freeze / scrub** | Pause the live view and inspect a segment: hover shows `seq`, latency and whether it was repaired. | Helpful for debugging V3, and for answering questions in the talk. | M |
+| N11 | **Color picker** | A small color control in the control bar; each peer picks its own stroke color. The default could be derived from the offer/answer role (e.g. offerer blue, answerer red). | Today each tab picks a random color from a palette of five, so both peers end up with the same color 1 in 5 times. Distinct colors show at a glance who drew what in the demo. Not relevant for the measurements. | S |
 
 **Suggested picks if time is limited:**
 
