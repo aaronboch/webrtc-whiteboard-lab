@@ -14,7 +14,7 @@ An in-page, seeded, deterministic stroke generator lives in `workload.ts`:
 - Strokes are random Bézier curves.
 - Points are sampled at 60 Hz with `setInterval`, which gives about 60 ops/s while drawing. `requestAnimationFrame` is not used, because it pauses in headless and background pages.
 - Each stroke lasts 1–2 s, followed by a 0.3 s pause.
-- One run draws for 30 s, which is about 1,800 ops.
+- One run draws for 30 s, which is about 1,500 ops (60 ops/s while drawing; the pauses take the rest). Seed 42 gives 1,494 ops in 18 strokes, about 124 bytes of JSON each.
 
 Playwright only calls `page.evaluate("app.startWorkload(seed, durationS)")`.
 

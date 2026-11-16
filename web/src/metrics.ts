@@ -29,6 +29,14 @@ export interface RecvEvent {
   duplicate: boolean
 }
 
+/** The automated workload of this run, if one ran on this peer. */
+export interface WorkloadInfo {
+  seed: number
+  durationS: number
+  tStart: number
+  tEnd: number
+}
+
 export interface MetricsDump {
   meta: {
     /** Variant of the open DataChannel (the offerer's), else the requested one. */
@@ -38,6 +46,7 @@ export interface MetricsDump {
     userAgent: string
     /** True when the page is cross-origin isolated: timer resolution 5 µs, else 100 µs. */
     crossOriginIsolated: boolean
+    workload: WorkloadInfo | null
   }
   sends: SendEvent[]
   recvs: RecvEvent[]
@@ -52,6 +61,7 @@ export class Metrics {
   /** Distinct seqs received, for duplicate detection and the HUD count. */
   private readonly seen = new Set<number>()
   private sent = 0
+  private workload: WorkloadInfo | null = null
 
   constructor(requestedVariant: string) {
     this.requestedVariant = requestedVariant
@@ -61,6 +71,10 @@ export class Metrics {
   /** The variant actually running (from the DataChannel label). */
   setVariant(variant: string): void {
     this.variant = variant
+  }
+
+  setWorkload(info: WorkloadInfo): void {
+    this.workload = info
   }
 
   recordSend(seq: number, t: number, bytes: number, kind: SendKind = 'data'): void {
@@ -94,6 +108,7 @@ export class Metrics {
     this.recvs = []
     this.seen.clear()
     this.sent = 0
+    this.workload = null
   }
 
   dump(): MetricsDump {
@@ -104,6 +119,7 @@ export class Metrics {
         timeOrigin: performance.timeOrigin,
         userAgent: navigator.userAgent,
         crossOriginIsolated: window.crossOriginIsolated,
+        workload: this.workload,
       },
       sends: this.sends,
       recvs: this.recvs,

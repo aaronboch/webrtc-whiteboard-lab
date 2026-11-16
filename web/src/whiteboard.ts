@@ -22,7 +22,7 @@ export interface WhiteboardOptions {
 }
 
 /** Logical coordinates are rounded to 0.1 px: plenty for drawing, smaller JSON. */
-const round = (v: number) => Math.round(v * 10) / 10
+export const roundCoord = (v: number) => Math.round(v * 10) / 10
 
 export class Whiteboard {
   private readonly container: HTMLElement
@@ -106,10 +106,10 @@ export class Whiteboard {
   }
 
   /**
-   * Store, draw and announce a segment drawn on this peer. The mouse uses
-   * it now; the automated workload (step 2.2) will use the same path.
+   * Store, draw and announce a segment drawn on this peer. The single path
+   * for local segments: the mouse and the automated workload both use it.
    */
-  private drawLocal(segment: Segment): void {
+  draw(segment: Segment): void {
     this.segments.push(segment)
     this.drawSegment(segment)
     this.options.onDraw(segment)
@@ -119,8 +119,8 @@ export class Whiteboard {
   private toLogical(event: PointerEvent): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect()
     return {
-      x: round(((event.clientX - rect.left) * WIDTH) / rect.width),
-      y: round(((event.clientY - rect.top) * HEIGHT) / rect.height),
+      x: roundCoord(((event.clientX - rect.left) * WIDTH) / rect.width),
+      y: roundCoord(((event.clientY - rect.top) * HEIGHT) / rect.height),
     }
   }
 
@@ -143,7 +143,7 @@ export class Whiteboard {
     const point = this.toLogical(event)
     if (point.x === last.x && point.y === last.y) return
     this.last = point
-    this.drawLocal({
+    this.draw({
       strokeId: this.strokeId,
       x0: last.x, y0: last.y, x1: point.x, y1: point.y,
       color: this.options.color,

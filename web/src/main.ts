@@ -7,6 +7,7 @@ import { Peer } from './peer'
 import { Signaling, signalingUrl } from './signaling'
 import { createTransport, parseVariant, type Transport } from './transport'
 import { Whiteboard } from './whiteboard'
+import { generateScript, runWorkload, type WorkloadTiming } from './workload'
 
 const params = new URLSearchParams(location.search)
 const variant = parseVariant(params.get('variant'))
@@ -17,10 +18,22 @@ const metrics = new Metrics(variant)
 // Automation API (extended in step 2.5); also handy from the DevTools console.
 declare global {
   interface Window {
-    app: { dumpMetrics(): MetricsDump }
+    app: {
+      dumpMetrics(): MetricsDump
+      startWorkload(seed: number, durationS: number): Promise<WorkloadTiming>
+    }
   }
 }
-window.app = { dumpMetrics: () => metrics.dump() }
+window.app = {
+  dumpMetrics: () => metrics.dump(),
+  /** Draws the seeded script through the normal local path; resolves when done. */
+  async startWorkload(seed, durationS) {
+    if (!transport) throw new Error('startWorkload: DataChannel not open')
+    const timing = await runWorkload(generateScript(seed, durationS), (s) => board.draw(s))
+    metrics.setWorkload({ seed, durationS, ...timing })
+    return timing
+  },
+}
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = '<header id="bar"></header><div id="board"></div>'
